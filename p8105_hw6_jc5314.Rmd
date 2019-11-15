@@ -1,0 +1,21 @@
+---
+title: "P8105 Homework 6"
+author: "Junxian Chen (jc5314)"
+date: "11/15/2019"
+output: github_document
+---
+
+```{r, include = FALSE}
+library(tidyverse)
+knitr::opts_chunk$set(
+	echo = TRUE,
+	warning = FALSE,
+  message = FALSE,
+	fig.width = 8, 
+  fig.height = 6,
+  out.width = "90%"
+)
+theme_set(theme_gray(base_size = 10) + theme(legend.position = "bottom"))
+```
+
+# Problem 1
