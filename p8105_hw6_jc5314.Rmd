@@ -7,6 +7,9 @@ output: github_document
 
 ```{r, include = FALSE}
 library(tidyverse)
+library(glmnet)
+library(modelr)
+
 knitr::opts_chunk$set(
 	echo = TRUE,
 	warning = FALSE,
@@ -19,3 +22,89 @@ theme_set(theme_gray(base_size = 10) + theme(legend.position = "bottom"))
 ```
 
 # Problem 1
+
+Firstly, read in the dataset and do data manipulation.
+
+```{r}
+birthweight_dat = 
+  read_csv("./data/birthweight.csv") %>% 
+  mutate(
+    babysex = factor(babysex, levels = c('1', '2')),
+    frace = factor(frace, levels = c('1', '2', '3', '4', '8', '9')),
+    malform = factor(malform, levels = c('0', '1')),
+    mrace = factor(mrace, levels = c('1', '2', '3', '4', '8'))
+  )
+```
+
+Use the **stepwise regreession method** to do the model selection.
+
+```{r}
+model_fit = lm(bwt ~ ., data = birthweight_dat) %>% 
+  step(direction = 'backward')
+
+summary(model_fit)
+```
+
+**Describe your modeling process:**
+
+
+A plot showing model residuals against fitted values: 
+
+```{r}
+birthweight_dat %>% 
+  add_predictions(model_fit) %>% 
+  add_residuals(model_fit) %>% 
+  ggplot(aes(x = pred, y = resid)) +
+  geom_point(alpha = .4, size = 2) +
+  xlab("Fitted Values") +
+  ylab("Residuals")
+```
+
+Model using length at birth and gestational age as predictors (main effects only):
+
+```{r}
+model_fit2 = lm(bwt ~ blength + gaweeks, data = birthweight_dat)
+
+model_fit2 %>% broom::tidy() %>% knitr::kable()
+```
+
+Model using head circumference, length, sex, and all interactions (including the three-way interaction) between these:
+
+```{r}
+model_fit3 = lm(bwt ~ bhead * blength * babysex, data = birthweight_dat)
+
+model_fit3 %>% broom::tidy() %>% knitr::kable()
+```
+
+```{r}
+cv_df = 
+  crossv_mc(birthweight_dat, 100) %>% 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble)
+    )
+```
+
+```{r}
+cv_df = 
+  cv_df %>% 
+  mutate(model1  = map(train, ~lm( bwt ~ babysex + bhead + blength + delwt + fincome + gaweeks + mheight + mrace + parity + ppwt + smoken, data = .x)),
+         model2  = map(train, ~lm(bwt ~ blength + gaweeks, data = .x)),
+         model3  = map(train, ~lm(bwt ~ bhead * blength * babysex, data = .x))) %>% 
+  mutate(rmse_model1 = map2_dbl(model1, test, ~rmse(model = .x, data = .y)),
+         rmse_model2 = map2_dbl(model2, test, ~rmse(model = .x, data = .y)),
+         rmse_model3 = map2_dbl(model3, test, ~rmse(model = .x, data = .y)))
+```
+
+```{r}
+cv_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") %>% 
+  mutate(model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + geom_violin()
+```
+
