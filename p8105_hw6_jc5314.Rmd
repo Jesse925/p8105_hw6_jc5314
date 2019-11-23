@@ -2,7 +2,9 @@
 title: "P8105 Homework 6"
 author: "Junxian Chen (jc5314)"
 date: "11/15/2019"
-output: github_document
+output: 
+  github_document:
+    pandoc_args: --webtex
 ---
 
 ```{r, include = FALSE}
@@ -20,6 +22,7 @@ knitr::opts_chunk$set(
 )
 theme_set(theme_gray(base_size = 10) + theme(legend.position = "bottom"))
 ```
+
 
 # Problem 1
 
@@ -76,6 +79,8 @@ model_fit3 = lm(bwt ~ bhead * blength * babysex, data = birthweight_dat)
 model_fit3 %>% broom::tidy() %>% knitr::kable()
 ```
 
+Make comparisons in terms of the cross-validated prediction error.
+
 ```{r}
 cv_df = 
   crossv_mc(birthweight_dat, 100) %>% 
@@ -106,5 +111,82 @@ cv_df %>%
     names_prefix = "rmse_") %>% 
   mutate(model = fct_inorder(model)) %>% 
   ggplot(aes(x = model, y = rmse)) + geom_violin()
+```
+
+**Comment:**
+
+
+# Problem 2
+
+Import data from website:
+
+```{r}
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2017-01-01",
+    date_max = "2017-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+```
+
+```{r}
+boot_straps = weather_df %>% 
+  bootstrap(n = 5000) %>% 
+  mutate(
+    models = map(strap,~ lm(tmax ~ tmin, data = .x) ),
+    results = map(models, broom::tidy),
+    results_glance = map(models, broom::glance)) %>% 
+  select(-strap, -models) %>% 
+  unnest(results, results_glance) %>% 
+  select(.id, term, estimate, r.squared) %>% 
+  pivot_wider(
+    names_from = "term",
+    values_from = "estimate"
+  ) %>% 
+  janitor::clean_names() %>% 
+  mutate(
+    log_coef = log(intercept * tmin)
+  )
+
+boot_straps
+```
+
+Plot of the distribution of $\hat{r}^2$:
+
+```{r}
+boot_straps %>% 
+  ggplot(aes(x = r_squared)) +
+  geom_density() +
+  xlab("Estimated r squared")
+```
+
+Plot of the distribution of $log(\hat{\beta}_0*\hat{\beta}_1)$:
+
+```{r}
+boot_straps %>% 
+  ggplot(aes(x = log_coef)) +
+  geom_density() +
+  xlab("Log(Beta_0 x Beta_1)")
+```
+
+2.5% and 97.5% quantiles for $\hat{r}^2$:
+
+```{r}
+boot_straps %>% 
+  pull(r_squared) %>% 
+  quantile(c(0.025, 0.975))
+```
+
+2.5% and 97.5% quantiles for $log(\hat{\beta}_0*\hat{\beta}_1)$:
+
+```{r}
+boot_straps %>% 
+  pull(log_coef) %>% 
+  quantile(c(0.025, 0.975))
 ```
 
